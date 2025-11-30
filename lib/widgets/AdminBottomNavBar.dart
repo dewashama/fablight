@@ -49,7 +49,7 @@ class AdminBottomNavBar extends StatelessWidget {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const RolePickScreen()),
-              (route) => false, // remove all previous routes
+              (route) => false,
         );
         break;
     }
@@ -57,73 +57,59 @@ class AdminBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 70,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0A1A5C),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 70,
+        decoration: const BoxDecoration(
+          color: Color(0xFF0A1A5C),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
         ),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          LayoutBuilder(builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final sideWidth = (width - 65) / 2;
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // ---------------------------
+            // NAV ICON ROW
+            // ---------------------------
+            Positioned.fill(
+              top: 70 * 0.10,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _navIcon(Icons.group_outlined, 0, context),
+                  _navIcon(Icons.menu_book_outlined, 1, context),
+                  const SizedBox(width: 65), // space for central Add button
+                  _navIcon(Icons.article_outlined, 3, context),
+                  _navIcon(Icons.logout, 4, context),
+                ],
+              ),
+            ),
 
-            return Row(
-              children: [
-                // LEFT SIDE
-                SizedBox(
-                  width: sideWidth,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _navIcon(Icons.group_outlined, 0, context),
-                      _navIcon(Icons.menu_book_outlined, 1, context),
-                    ],
-                  ),
-                ),
-
-                // SPACE FOR CIRCLE BUTTON
-                const SizedBox(width: 65),
-
-                // RIGHT SIDE
-                SizedBox(
-                  width: sideWidth,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _navIcon(Icons.article_outlined, 3, context),
-                      _navIcon(Icons.logout, 4, context), // <-- logout icon
-                    ],
-                  ),
-                ),
-              ],
-            );
-          }),
-
-          // CENTER CIRCULAR BUTTON
-          Positioned(
-            top: -28,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: GestureDetector(
-                onTap: () => _onItemTapped(context, 2),
-                child: Container(
-                  height: 65,
-                  width: 65,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border:
-                    Border.all(color: const Color(0xFF0A1A5C), width: 5),
-                  ),
-                  child: const Center(
-                    child: Icon(
+            // ---------------------------
+            // CENTRAL ADD BUTTON
+            // ---------------------------
+            Positioned(
+              top: -28,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () => _onItemTapped(context, 2),
+                  child: Container(
+                    height: 65,
+                    width: 65,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      border: Border.all(
+                        color: const Color(0xFF0A1A5C),
+                        width: 5,
+                      ),
+                    ),
+                    child: const Icon(
                       Icons.add,
                       size: 35,
                       color: Color(0xFF0A1A5C),
@@ -132,19 +118,39 @@ class AdminBottomNavBar extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
+  // ---------------------------
+  // NAV ICON WITH UNDERLINE
+  // ---------------------------
   Widget _navIcon(IconData icon, int index, BuildContext context) {
+    final bool selected = (index == currentIndex);
+
     return GestureDetector(
       onTap: () => _onItemTapped(context, index),
-      child: Icon(
-        icon,
-        size: 30,
-        color: Colors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: selected ? 34 : 30,
+            color: selected ? Colors.white : Colors.white70,
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.only(top: 2),
+            height: 3.5,
+            width: selected ? 28 : 0,
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFF4DB5FF) : Colors.transparent,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        ],
       ),
     );
   }

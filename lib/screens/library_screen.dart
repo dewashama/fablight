@@ -272,7 +272,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      bottomNavigationBar: const BottomNavBar(currentIndex: 0),
+      bottomNavigationBar: const BottomNavBar(currentIndex: 4),
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.only(bottom: kBottomNavigationBarHeight),

@@ -159,7 +159,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: const BottomNavBar(currentIndex: 1),
+      bottomNavigationBar: BottomNavBar(currentIndex: 3),
     );
   }
 }

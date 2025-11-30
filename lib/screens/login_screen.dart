@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../controllers/auth_controller.dart';
 import 'register_screen.dart';
+import 'rolepick_screen.dart'; // <-- import this
 
 class LoginScreen extends StatelessWidget {
   LoginScreen({Key? key}) : super(key: key);
@@ -12,9 +13,25 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A1A5C),
+
+      // ⬅️ Transparent AppBar with back arrow
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const RolePickScreen()),
+            );
+          },
+        ),
+      ),
+
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 60),
+          padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
