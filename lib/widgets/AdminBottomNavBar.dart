@@ -87,7 +87,6 @@ class AdminBottomNavBar extends StatelessWidget {
                 ],
               ),
             ),
-
             // ---------------------------
             // CENTRAL ADD BUTTON
             // ---------------------------
