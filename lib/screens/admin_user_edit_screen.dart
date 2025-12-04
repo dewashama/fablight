@@ -19,6 +19,8 @@ class _AdminUserEditScreenState extends State<AdminUserEditScreen> {
   late TextEditingController passwordController;
   Uint8List? profilePic;
 
+  bool obscurePassword = true; // 🔹 toggle password visibility
+
   @override
   void initState() {
     super.initState();
@@ -49,7 +51,6 @@ class _AdminUserEditScreenState extends State<AdminUserEditScreen> {
         'profilePic': profilePic,
       };
 
-      // Correct usage of DBHelper updateUser
       await DBHelper.instance.updateUser(widget.user['id'], updatedUser);
       Navigator.pop(context);
     }
@@ -72,7 +73,7 @@ class _AdminUserEditScreenState extends State<AdminUserEditScreen> {
 
     if (confirm == true) {
       await DBHelper.instance.deleteUser(widget.user['id']);
-      Navigator.pop(context); // back to users list
+      Navigator.pop(context);
     }
   }
 
@@ -115,8 +116,20 @@ class _AdminUserEditScreenState extends State<AdminUserEditScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: passwordController,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          obscurePassword = !obscurePassword;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: obscurePassword, // 🔹 toggle here
                   validator: (val) => val == null || val.isEmpty ? 'Password required' : null,
                 ),
                 const SizedBox(height: 24),

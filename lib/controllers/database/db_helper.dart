@@ -20,15 +20,12 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 12, // Incremented to include notices
+      version: 15, // Incremented for notifications
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
   }
 
-  // =======================================================
-  // CREATE DATABASE SCHEMA
-  // =======================================================
   Future _createDB(Database db, int version) async {
     await db.execute('''
       CREATE TABLE users (
@@ -38,7 +35,8 @@ class DBHelper {
         username TEXT,
         name TEXT,
         profilePic BLOB,
-        isLoggedIn INTEGER DEFAULT 0
+        isLoggedIn INTEGER DEFAULT 0,
+        role TEXT DEFAULT 'user'
       )
     ''');
 
@@ -52,6 +50,7 @@ class DBHelper {
         cover BLOB NOT NULL,
         filePath TEXT NOT NULL,
         tags TEXT DEFAULT '',
+        isApproved INTEGER DEFAULT 0,
         FOREIGN KEY(userId) REFERENCES users(id)
       )
     ''');
@@ -60,7 +59,7 @@ class DBHelper {
       CREATE TABLE reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         bookId INTEGER NOT NULL,
-        userId INTEGER NOT NULL,
+        userId INTEGER,
         rating INTEGER NOT NULL,
         review TEXT,
         createdAt TEXT,
@@ -112,7 +111,6 @@ class DBHelper {
       )
     ''');
 
-    // Notices table
     await db.execute('''
       CREATE TABLE notices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,11 +118,33 @@ class DBHelper {
         slot INTEGER NOT NULL UNIQUE
       )
     ''');
+
+    // -----------------------------
+    // NEW NOTIFICATIONS TABLE
+    // -----------------------------
+    await db.execute('''
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      isRead INTEGER DEFAULT 0,
+      FOREIGN KEY(userId) REFERENCES users(id)
+  )
+''');
+
+    await DBHelper.instance.registerUser(
+      'admin@example.com',
+      'adminpass',
+      username: 'admin',
+      name: 'Administrator',
+      role: 'admin',
+    );
+
+
   }
 
-  // =======================================================
-  // UPGRADE DATABASE
-  // =======================================================
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 8) {
       try { await db.execute('ALTER TABLE reviews ADD COLUMN userId INTEGER'); } catch (_) {}
@@ -149,17 +169,153 @@ class DBHelper {
         )
       ''');
     }
+    if (oldVersion < 13) {
+      try { await db.execute('ALTER TABLE books ADD COLUMN isApproved INTEGER DEFAULT 0'); } catch (_) {}
+    }
+    if (oldVersion < 14) {
+      try { await db.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"); } catch (_) {}
+    }
+    if (oldVersion < 15) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS notifications (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          createdAt TEXT NOT NULL,
+          isRead INTEGER DEFAULT 0
+        )
+      ''');
+    }
+    if (oldVersion < 15) {
+      await db.execute('''
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      isRead INTEGER DEFAULT 0
+    )
+  ''');
+    }
+    if (oldVersion < 16) {
+      try {
+        await db.execute('ALTER TABLE notifications ADD COLUMN userId INTEGER DEFAULT 1');
+        // default 1 just to avoid nulls; adjust as needed
+      } catch (_) {}
+    }
+
+  }
+
+  // =======================================================
+  // NOTIFICATIONS METHODS
+  // =======================================================
+
+  // ---------------- NOTIFICATIONS ----------------
+  Future<int> addNotification({
+    required int userId,
+    required String title,
+    required String message,
+  }) async {
+    final db = await database;
+    try {
+      return await db.insert(
+        'notifications',
+        {
+          'userId': userId,
+          'title': title,
+          'message': message,
+          'createdAt': DateTime.now().toIso8601String(),
+          'isRead': 0,
+        },
+      );
+    } catch (e) {
+      print('Failed to insert notification: $e');
+      rethrow;
+    }
+  }
+
+
+  Future<List<Map<String, dynamic>>> getUserNotifications(int userId) async {
+    final db = await database;
+    return await db.query(
+      'notifications',
+      where: 'userId = ?',
+      whereArgs: [userId],
+      orderBy: 'createdAt DESC',
+    );
+  }
+
+  Future<int> updateNotificationRead(int notificationId) async {
+    final db = await database;
+    return await db.update(
+      'notifications',
+      {'isRead': 1},
+      where: 'id = ?',
+      whereArgs: [notificationId],
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getAllNotifications() async {
+    final db = await database;
+    return await db.query(
+      'notifications',
+      orderBy: 'createdAt DESC',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getUnreadNotifications() async {
+    final db = await database;
+    return await db.query(
+      'notifications',
+      where: 'isRead = ?',
+      whereArgs: [0],
+      orderBy: 'createdAt DESC',
+    );
+  }
+
+  Future<int> addVerificationNotification({
+    required int userId,
+    required String title,
+    required String message,
+  }) async {
+    return await addNotification(
+      userId: userId,
+      title: title,
+      message: message,
+    );
+  }
+
+  Future<int> markAllNotificationsRead() async {
+    final db = await database;
+    return await db.update(
+      'notifications',
+      {'isRead': 1},
+    );
+  }
+
+
+// Mark all notifications read for a specific user
+  Future<void> markAllNotificationsReadForUser(int userId) async {
+    final db = await database;
+    await db.update(
+      'notifications',
+      {'isRead': 1},
+      where: 'userId = ?',
+      whereArgs: [userId],
+    );
   }
 
   // =======================================================
   // USER METHODS
   // =======================================================
+
   Future<int> registerUser(
       String email,
       String password, {
         required String username,
         required String name,
         Uint8List? profilePic,
+        String role = 'user',  // ⭐ NEW
       }) async {
     final db = await instance.database;
     return await db.insert(
@@ -171,6 +327,7 @@ class DBHelper {
         "name": name,
         "profilePic": profilePic,
         "isLoggedIn": 0,
+        "role": role,  // ⭐ NEW
       },
     );
   }
@@ -286,6 +443,7 @@ class DBHelper {
     required Uint8List coverBytes,
     required String filePath,
     String? tags,
+    int isApproved = 0, // ⭐ NEW
   }) async {
     final db = await instance.database;
     return await db.insert(
@@ -298,29 +456,94 @@ class DBHelper {
         "cover": coverBytes,
         "filePath": filePath,
         "tags": tags ?? "",
+        "isApproved": isApproved,
       },
     );
   }
 
   Future<List<Map<String, dynamic>>> getBooks({String? tagFilter}) async {
     final db = await instance.database;
-
     if (tagFilter == null || tagFilter.trim().isEmpty) {
-      return await db.query("books");
+      return await db.query("books", where: "isApproved = 1");
     }
-
     final tag = tagFilter.trim().toLowerCase();
     return await db.rawQuery(
-      "SELECT * FROM books WHERE LOWER(tags) LIKE ?",
+      "SELECT * FROM books WHERE LOWER(tags) LIKE ? AND isApproved = 1",
       ['%$tag%'],
     );
   }
 
-  // ✅ New method to get all books for admin search
   Future<List<Map<String, dynamic>>> getAllBooks() async {
     final db = await instance.database;
-    return await db.query('books', orderBy: 'title ASC');
+    return await db.query('books', where: 'isApproved = 1', orderBy: 'title ASC');
   }
+
+  Future<List<Map<String, dynamic>>> getPendingBooks() async {
+    final db = await instance.database;
+    return await db.query("books", where: "isApproved = 0");
+  }
+
+  Future<int> approveBook(int bookId) async {
+    final db = await instance.database;
+
+    // 1️⃣ Get the book info first
+    final bookRes = await db.query("books", where: "id = ?", whereArgs: [bookId], limit: 1);
+    if (bookRes.isEmpty) return 0;
+    final book = bookRes.first;
+    final userId = book['userId'] as int?;
+    final title = book['title'] as String?;
+
+    // 2️⃣ Update approval
+    final updated = await db.update(
+      "books",
+      {"isApproved": 1},
+      where: "id = ?",
+      whereArgs: [bookId],
+    );
+
+    // 3️⃣ Send notification to user
+    if (userId != null && title != null) {
+      await addNotification(
+        userId: userId,
+        title: "Book Approved",
+        message: "Your book \"$title\" has been verified and uploaded.",
+      );
+    }
+
+    return updated;
+  }
+
+
+  Future<int> rejectBook(int bookId) async {
+    final db = await instance.database;
+
+    // Get book info
+    final bookRes = await db.query("books", where: "id = ?", whereArgs: [bookId], limit: 1);
+    if (bookRes.isEmpty) return 0;
+    final book = bookRes.first;
+    final userId = book['userId'] as int?;
+    final title = book['title'] as String?;
+
+    // Delete or mark rejected
+    final updated = await db.update(
+      "books",
+      {"isApproved": -1}, // optional: -1 for rejected
+      where: "id = ?",
+      whereArgs: [bookId],
+    );
+
+    // Send notification
+    if (userId != null && title != null) {
+      await addNotification(
+        userId: userId,
+        title: "Book Rejected",
+        message: "Your book \"$title\" has been rejected by the admin.",
+      );
+    }
+
+    return updated;
+  }
+
 
   Future<Map<String, dynamic>?> getBookById(int id) async {
     final db = await instance.database;
@@ -347,6 +570,17 @@ class DBHelper {
     );
   }
 
+  Future<String?> getBookFilePath(int bookId) async {
+    final db = await instance.database;
+    final res = await db.query(
+      "books",
+      columns: ["filePath"],
+      where: "id = ?",
+      whereArgs: [bookId],
+      limit: 1,
+    );
+    return res.isNotEmpty ? res.first['filePath'] as String : null;
+  }
   // =======================================================
   // REVIEWS METHODS
   // =======================================================
@@ -553,7 +787,7 @@ class DBHelper {
 
   Future<List<Map<String, dynamic>>> getUsers() async {
     final db = await database;
-    return await db.query('users'); // return all users
+    return await db.query('users');
   }
 
   // =======================================================
@@ -589,6 +823,6 @@ class DBHelper {
       orderBy: 'createdAt DESC',
     );
   }
+
+
 }
-
-

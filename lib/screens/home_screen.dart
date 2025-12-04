@@ -34,17 +34,23 @@ class _HomeScreenState extends State<HomeScreen> {
     activeUser = await DBHelper.instance.getActiveUser();
 
     final db = await DBHelper.instance.database;
-    final res = await db.query('books');
+    // Fetch only verified books
+    final res = await db.query(
+      'books',
+      where: 'isApproved = ?',
+      whereArgs: [1],
+    );
 
     // Only books with cover
     allBooks = res.where((b) => b['cover'] != null).toList();
 
-    // Recommended: exclude books uploaded by active user
-    final otherUsersBooks =
-    allBooks.where((b) => b['userId'] != activeUser!['id']).toList();
-    recommendedBooks = getRandomBooks(otherUsersBooks, 6);
+    // Recommended: only approved books not uploaded by active user
+    recommendedBooks = getRandomBooks(
+      allBooks.where((b) => b['userId'] != activeUser!['id']).toList(),
+      6,
+    );
 
-    // New arrivals: latest 6 books by createdAt timestamp
+    // New arrivals: latest 6 approved books
     newArrivals = getNewBooks(allBooks, 6);
 
     setState(() {});

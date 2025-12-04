@@ -1,16 +1,17 @@
-import 'package:flutter/material.dart';
-import '../screens/settings_screen.dart';
-import '../screens/profile_screen.dart';
-import '../controllers/database/db_helper.dart';
 
-class HeaderSection extends StatefulWidget {
-  const HeaderSection({super.key});
+import 'package:flutter/material.dart';
+import '../controllers/database/db_helper.dart';
+import '../screens/rolepick_screen.dart';
+import '../screens/admin_verification_screen.dart';
+
+class AdminHeaderSection extends StatefulWidget {
+  const AdminHeaderSection({super.key});
 
   @override
-  State<HeaderSection> createState() => _HeaderSectionState();
+  State<AdminHeaderSection> createState() => _AdminHeaderSectionState();
 }
 
-class _HeaderSectionState extends State<HeaderSection> {
+class _AdminHeaderSectionState extends State<AdminHeaderSection> {
   Map<String, dynamic>? currentUser;
   List<Map<String, dynamic>> notifications = [];
   bool hasUnread = false;
@@ -19,13 +20,14 @@ class _HeaderSectionState extends State<HeaderSection> {
   void initState() {
     super.initState();
     fetchCurrentUser();
+    fetchNotifications();
+
+    // Debug: print all notifications
+    DBHelper.instance.getAllNotifications().then((value) {
+      print("All notifications: $value");
+    });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    fetchCurrentUser();
-  }
 
   Future<void> fetchCurrentUser() async {
     final user = await DBHelper.instance.getActiveUser();
@@ -33,16 +35,11 @@ class _HeaderSectionState extends State<HeaderSection> {
       setState(() {
         currentUser = user;
       });
-      fetchNotifications(user['id']); // fetch notifications for this user
-    } else {
-      setState(() {
-        currentUser = null;
-      });
     }
   }
 
-  Future<void> fetchNotifications(int userId) async {
-    final allNotifications = await DBHelper.instance.getUserNotifications(userId);
+  Future<void> fetchNotifications() async {
+    final allNotifications = await DBHelper.instance.getAllNotifications();
 
     setState(() {
       notifications = allNotifications;
@@ -50,16 +47,16 @@ class _HeaderSectionState extends State<HeaderSection> {
     });
   }
 
+
+
   Future<void> markNotificationRead(int id) async {
     await DBHelper.instance.updateNotificationRead(id);
-    if (currentUser != null) fetchNotifications(currentUser!['id']);
+    fetchNotifications();
   }
 
   Future<void> markAllRead() async {
-    if (currentUser != null) {
-      await DBHelper.instance.markAllNotificationsReadForUser(currentUser!['id']);
-      fetchNotifications(currentUser!['id']);
-    }
+    await DBHelper.instance.markAllNotificationsRead();
+    fetchNotifications();
   }
 
   void _openNotificationsDrawer() {
@@ -88,7 +85,11 @@ class _HeaderSectionState extends State<HeaderSection> {
                   ),
                   const SizedBox(height: 8),
                   ElevatedButton(
-                    onPressed: markAllRead,
+                    onPressed: () async {
+                      await DBHelper.instance.markAllNotificationsRead();
+                      fetchNotifications();
+                      // refresh list
+                    },
                     child: const Text("Mark all as read"),
                   ),
                   const SizedBox(height: 16),
@@ -110,7 +111,16 @@ class _HeaderSectionState extends State<HeaderSection> {
                         final textColor = isRead ? Colors.grey[700] : Colors.black;
 
                         return GestureDetector(
-                          onTap: () => markNotificationRead(notification['id']),
+                          onTap: () async {
+                            await DBHelper.instance.updateNotificationRead(notification['id']);
+                            fetchNotifications();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AdminVerificationScreen(),
+                              ),
+                            );
+                          },
                           child: Container(
                             margin: const EdgeInsets.symmetric(vertical: 4),
                             padding: const EdgeInsets.all(12),
@@ -131,8 +141,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                                       Text(
                                         notification['title'] ?? 'No Title',
                                         style: TextStyle(
-                                          fontWeight:
-                                          isRead ? FontWeight.normal : FontWeight.bold,
+                                          fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
                                           color: textColor,
                                           fontSize: 16,
                                         ),
@@ -157,6 +166,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                       },
                     ),
                   ),
+
                 ],
               ),
             ),
@@ -173,6 +183,18 @@ class _HeaderSectionState extends State<HeaderSection> {
     );
   }
 
+
+  Future<void> _logout() async {
+    await DBHelper.instance.logoutUser();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const RolePickScreen()),
+            (route) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -186,7 +208,6 @@ class _HeaderSectionState extends State<HeaderSection> {
           ),
           Row(
             children: [
-              /// NOTIFICATIONS BUTTON
               Stack(
                 children: [
                   IconButton(
@@ -208,37 +229,9 @@ class _HeaderSectionState extends State<HeaderSection> {
                     ),
                 ],
               ),
-
-              /// SETTINGS BUTTON
               IconButton(
-                icon: const Icon(Icons.settings_outlined, color: Colors.black),
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                  fetchCurrentUser();
-                },
-              ),
-
-              /// PROFILE AVATAR
-              GestureDetector(
-                onTap: () {
-                  if (currentUser != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ProfileScreen(userId: currentUser!['id']),
-                      ),
-                    ).then((_) => fetchCurrentUser());
-                  }
-                },
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundImage: currentUser != null && currentUser!['profilePic'] != null
-                      ? MemoryImage(currentUser!['profilePic'])
-                      : const AssetImage("assets/profile.jpg") as ImageProvider,
-                ),
+                icon: const Icon(Icons.logout_outlined, color: Colors.black),
+                onPressed: _logout,
               ),
             ],
           ),

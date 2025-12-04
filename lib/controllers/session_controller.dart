@@ -17,6 +17,12 @@ class Session {
     return null;
   }
 
+  /// Get the role of the current user
+  static Future<String?> getUserRole() async {
+    final user = await getUser();
+    return user?['role'] as String?;
+  }
+
   /// ✅ Set the current user ID (needed for login/register)
   static Future<void> setUserId(int userId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -29,3 +35,4 @@ class Session {
     await prefs.remove('userId');
   }
 }
+

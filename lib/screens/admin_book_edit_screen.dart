@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../controllers/database/db_helper.dart';
+import 'reader_screen.dart';
 
 class AdminBookEditScreen extends StatefulWidget {
   final Map<String, dynamic> book;
@@ -55,6 +56,15 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
     }
   }
 
+  Future<void> pickFile() async {
+    // You can use file_picker package if this is a local file
+    // Example:
+    // final result = await FilePicker.platform.pickFiles();
+    // if (result != null) {
+    //   filePathController.text = result.files.single.path!;
+    // }
+  }
+
   void saveChanges() async {
     if (_formKey.currentState!.validate()) {
       final updatedBook = {
@@ -94,13 +104,23 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
     }
   }
 
+  void openReader() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReaderScreen(filePath: filePathController.text, title: '',),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Book'),
+        title: const Text('Edit Book', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF2929BB),
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white), // back arrow white
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -142,11 +162,23 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
                   val == null || val.trim().isEmpty ? 'Author required' : null,
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: filePathController,
-                  decoration: const InputDecoration(labelText: 'File Path'),
-                  validator: (val) =>
-                  val == null || val.trim().isEmpty ? 'File path required' : null,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: filePathController,
+                        decoration: const InputDecoration(labelText: 'File Path'),
+                        validator: (val) => val == null || val.trim().isEmpty
+                            ? 'File path required'
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: pickFile,
+                      child: const Text('Change File'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -159,13 +191,24 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                       onPressed: deleteBook,
                       child: const Text('Delete Book'),
                     ),
-                    ElevatedButton(
-                      onPressed: saveChanges,
-                      child: const Text('Save Changes'),
+                    Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: openReader,
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green, foregroundColor: Colors.white),
+                          child: const Text('Read'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: saveChanges,
+                          child: const Text('Save Changes'),
+                        ),
+                      ],
                     ),
                   ],
                 )

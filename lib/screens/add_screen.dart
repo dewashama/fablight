@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+
 import '../widgets/bottom_nav_bar.dart';
 import '../controllers/database/db_helper.dart';
 import '../controllers/session_controller.dart';
@@ -18,7 +19,7 @@ class _AddScreenState extends State<AddScreen> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController summaryController = TextEditingController();
   final TextEditingController authorController = TextEditingController();
-  final TextEditingController tagInputCtrl = TextEditingController();
+  final TextEditingController tagInputController = TextEditingController();
 
   XFile? bookCover;
   Uint8List? bookCoverBytes;
@@ -28,6 +29,7 @@ class _AddScreenState extends State<AddScreen> {
   final List<String> tags = [];
 
   int? currentUserId;
+  String? currentUserRole;
   bool isLoading = true;
 
   @override
@@ -38,14 +40,18 @@ class _AddScreenState extends State<AddScreen> {
 
   Future<void> _loadUserSession() async {
     final id = await Session.getUserId();
+    final role = await Session.getUserRole();
+
     if (id == null) {
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/login');
       }
       return;
     }
+
     setState(() {
       currentUserId = id;
+      currentUserRole = role ?? "user";
       isLoading = false;
     });
   }
@@ -68,20 +74,20 @@ class _AddScreenState extends State<AddScreen> {
     );
     if (result != null && result.files.single.path != null) {
       setState(() {
-        bookFilePath = result.files.single.path;
+        bookFilePath = result.files.single.path!;
       });
     }
   }
 
   void addTagFromInput() {
-    final t = tagInputCtrl.text.trim();
+    final t = tagInputController.text.trim();
     if (t.isEmpty) return;
 
     if (!tags.map((e) => e.toLowerCase()).contains(t.toLowerCase())) {
       setState(() => tags.add(t));
     }
 
-    tagInputCtrl.clear();
+    tagInputController.clear();
   }
 
   void removeTag(String t) {
@@ -107,30 +113,60 @@ class _AddScreenState extends State<AddScreen> {
       return;
     }
 
+    final isApproved = (currentUserRole == "admin") ? 1 : 0;
+
     try {
-      await DBHelper.instance.insertBook(
-        userId: currentUserId!,        // <-- ADDED
+      // Insert book with isApproved flag
+      final bookId = await DBHelper.instance.insertBook(
+        userId: currentUserId!,
         title: titleController.text,
         summary: summaryController.text,
         author: authorController.text,
         coverBytes: bookCoverBytes!,
         filePath: bookFilePath!,
         tags: tags.join(','),
+        isApproved: isApproved,
       );
+
+      // Send notifications to admins if user is not admin
+      if (currentUserRole != "admin") {
+        final admins = await DBHelper.instance.getUsers();
+        final adminUsers = admins.where((u) => u['role'] == 'admin').toList();
+
+        print("Admins found: ${adminUsers.length}");
+        for (var admin in adminUsers) {
+          try {
+            final id = await DBHelper.instance.addVerificationNotification(
+              userId: admin['id'],
+              title: 'Book Verification',
+              message: "New book submitted: ${titleController.text}",
+            );
+            print('Notification added for admin ${admin['id']} with id $id');
+          } catch (e) {
+            print('Error adding notification for admin ${admin['id']}: $e');
+          }
+        }
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Book added successfully!')),
+        SnackBar(
+          content: Text(
+            isApproved == 1
+                ? 'Book added & automatically approved (Admin).'
+                : 'Book submitted! Awaiting admin approval.',
+          ),
+        ),
       );
 
+      // Clear all input fields
       setState(() {
         titleController.clear();
         summaryController.clear();
         authorController.clear();
-        bookCover = null;
         bookCoverBytes = null;
         bookFilePath = null;
         tags.clear();
-        tagInputCtrl.clear();
+        tagInputController.clear();
       });
 
       Navigator.pushReplacement(
@@ -149,7 +185,7 @@ class _AddScreenState extends State<AddScreen> {
     titleController.dispose();
     summaryController.dispose();
     authorController.dispose();
-    tagInputCtrl.dispose();
+    tagInputController.dispose();
     super.dispose();
   }
 
@@ -166,9 +202,9 @@ class _AddScreenState extends State<AddScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ---------------- Back Arrow + Title ----------------
+            // Top Bar
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(
                 children: [
                   IconButton(
@@ -189,80 +225,79 @@ class _AddScreenState extends State<AddScreen> {
               ),
             ),
 
-            // ---------------- Form ----------------
+            // Form
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Book Cover Picker
                     GestureDetector(
                       onTap: pickCoverImage,
                       child: Container(
-                        height: 150,
+                        height: 160,
                         width: double.infinity,
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: bookCoverBytes != null
                             ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.memory(bookCoverBytes!, fit: BoxFit.cover),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.memory(
+                            bookCoverBytes!,
+                            fit: BoxFit.cover,
+                          ),
                         )
-                            : const Center(child: Text('Tap to select book cover')),
+                            : const Center(
+                          child: Text(
+                            'Tap to select cover image',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Title
                     TextField(
                       controller: titleController,
                       decoration: const InputDecoration(
-                        labelText: 'Book Title',
+                        labelText: "Book Title",
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Summary
                     TextField(
                       controller: summaryController,
                       maxLines: 4,
                       decoration: const InputDecoration(
-                        labelText: 'Summary',
+                        labelText: "Summary",
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Author
                     TextField(
                       controller: authorController,
                       decoration: const InputDecoration(
-                        labelText: 'Author',
+                        labelText: "Author",
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Tags
-                    Text(
-                      "Tags (press Add or Enter to add)",
-                      style: TextStyle(color: Colors.black87),
-                    ),
+                    const Text("Tags"),
                     const SizedBox(height: 8),
 
                     Row(
                       children: [
                         Expanded(
                           child: TextField(
-                            controller: tagInputCtrl,
-                            textInputAction: TextInputAction.done,
+                            controller: tagInputController,
                             onSubmitted: (_) => addTagFromInput(),
                             decoration: const InputDecoration(
-                              hintText: 'e.g. fantasy, classic, poetry',
+                              hintText: "e.g. fantasy, classic",
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -271,40 +306,37 @@ class _AddScreenState extends State<AddScreen> {
                         ElevatedButton(
                           onPressed: addTagFromInput,
                           child: const Text("Add"),
-                        ),
+                        )
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
 
                     Wrap(
                       spacing: 8,
-                      runSpacing: 6,
-                      children: tags.map((t) {
-                        return Chip(
-                          label: Text(t),
-                          onDeleted: () => removeTag(t),
-                        );
-                      }).toList(),
+                      children: tags
+                          .map((t) => Chip(
+                        label: Text(t),
+                        onDeleted: () => removeTag(t),
+                      ))
+                          .toList(),
                     ),
                     const SizedBox(height: 16),
 
-                    // File Picker
                     ElevatedButton(
                       onPressed: pickBookFile,
                       child: Text(
-                        bookFilePath != null
-                            ? 'Selected: ${bookFilePath!.split('/').last}'
-                            : 'Upload PDF/EPUB',
+                        bookFilePath == null
+                            ? "Upload PDF/EPUB"
+                            : "Selected: ${bookFilePath!.split('/').last}",
                       ),
                     ),
                     const SizedBox(height: 24),
 
-                    // Submit
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: submitBook,
-                        child: const Text('Add Book'),
+                        child: const Text("Add Book"),
                       ),
                     ),
                   ],

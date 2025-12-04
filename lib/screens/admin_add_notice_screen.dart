@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../controllers/database/db_helper.dart';
 import '../widgets/AdminBottomNavBar.dart';
+import '../widgets/AdminHeader_bar.dart'; // import the new header
 
 class AdminAddNoticeScreen extends StatefulWidget {
   const AdminAddNoticeScreen({super.key});
@@ -86,28 +87,28 @@ class _AdminAddNoticeScreenState extends State<AdminAddNoticeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false, // removes top back arrow
-        backgroundColor: const Color(0xFF0A1A5C),
-        title: const Text(
-          'Add Notices',
-          style: TextStyle(color: Colors.white), // white header text
-        ),
-        centerTitle: true,
+      backgroundColor: Colors.white,
+      // Use the AdminHeaderSection instead of AppBar
+      body: Column(
+        children: [
+          const AdminHeaderSection(), // ✅ header with notifications & logout
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ListView(
+                children: [
+                  _buildSlot(1),
+                  const SizedBox(height: 12),
+                  _buildSlot(2),
+                  const SizedBox(height: 12),
+                  _buildSlot(3),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: ListView(
-          children: [
-            _buildSlot(1),
-            const SizedBox(height: 12),
-            _buildSlot(2),
-            const SizedBox(height: 12),
-            _buildSlot(3),
-          ],
-        ),
-      ),
-      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 2), // Center notice button
+      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 2),
     );
   }
 }

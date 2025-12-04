@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../controllers/database/db_helper.dart';
 import 'admin_book_edit_screen.dart';
 import '../widgets/AdminBottomNavBar.dart';
+import '../widgets/AdminHeader_bar.dart'; // <-- added
 
 class AdminBookSearchScreen extends StatefulWidget {
   const AdminBookSearchScreen({super.key});
@@ -53,23 +54,19 @@ class _AdminBookSearchScreenState extends State<AdminBookSearchScreen> {
       MaterialPageRoute(
         builder: (_) => AdminBookEditScreen(book: book),
       ),
-    ).then((_) => fetchBooks()); // Refresh list after editing
+    ).then((_) => fetchBooks());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false, // removes top back arrow
-        backgroundColor: const Color(0xFF2929BB),
-        title: const Text(
-          'Search Books',
-          style: TextStyle(color: Colors.white), // white header text
-        ),
-        centerTitle: true,
-      ),
+      backgroundColor: Colors.white,
+
       body: Column(
         children: [
+          const AdminHeaderSection(),  // ⭐ NEW HEADER ADDED
+
+          // SEARCH BAR
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -83,6 +80,8 @@ class _AdminBookSearchScreenState extends State<AdminBookSearchScreen> {
               ),
             ),
           ),
+
+          // BOOK LIST
           Expanded(
             child: filteredBooks.isEmpty
                 ? const Center(child: Text('No books found'))
@@ -105,8 +104,8 @@ class _AdminBookSearchScreenState extends State<AdminBookSearchScreen> {
           ),
         ],
       ),
-      bottomNavigationBar:
-      const AdminBottomNavBar(currentIndex: 1), // Books tab
+
+      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 1),
     );
   }
 }

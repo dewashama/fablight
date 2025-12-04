@@ -2,18 +2,20 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+
 import '../controllers/database/db_helper.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../screens/home_screen.dart';
+import 'reader_screen.dart';
 
 class BookDetailPage extends StatefulWidget {
   final Map<String, dynamic> book;
-  final Map<String, dynamic>? activeUser; // <- added this
+  final Map<String, dynamic>? activeUser;
 
   const BookDetailPage({
     super.key,
     required this.book,
-    this.activeUser, // <- accept it
+    this.activeUser,
   });
 
   @override
@@ -34,7 +36,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
   Future<void> fetchReviews() async {
     final res = await DBHelper.instance.getReviews(widget.book['id']);
     if (!mounted) return;
-
     setState(() {
       reviews = res;
     });
@@ -42,8 +43,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
 
   Future<void> submitReview() async {
     final text = reviewController.text.trim();
-
-    // Use activeUser if passed, otherwise fallback to DBHelper
     final user = widget.activeUser ?? await DBHelper.instance.getActiveUser();
 
     if (user == null) {
@@ -53,8 +52,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
       return;
     }
 
-    final userId = user["id"]; // ensure integer
-
+    final userId = user["id"];
     if (rating == 0 && text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please provide a rating or review')),
@@ -70,12 +68,10 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
 
     if (!mounted) return;
-
     reviewController.clear();
     setState(() {
       rating = 0;
     });
-
     await fetchReviews();
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -117,15 +113,15 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final String summary = widget.book['summary'];
     final tags = parseTags(widget.book['tags'] ?? "");
 
-    // check if logged-in user is uploader (optional)
     final isUploader = widget.activeUser != null &&
-        widget.activeUser!['id'] == widget.book['uploaderId']; // you must save uploaderId in books table
+        widget.activeUser!['id'] == widget.book['uploaderId'];
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
+            // Header
             Padding(
               padding: const EdgeInsets.all(8),
               child: Row(
@@ -133,10 +129,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back, size: 28),
                     onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const HomeScreen()),
-                      );
+                      Navigator.pop(context);
                     },
                   ),
                   const Text(
@@ -147,9 +140,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                   if (isUploader)
                     IconButton(
                       icon: const Icon(Icons.edit),
-                      onPressed: () {
-                        // navigate to EditBookScreen
-                      },
+                      onPressed: () {},
                     ),
                 ],
               ),
@@ -161,7 +152,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Cover
                     Center(
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
@@ -174,25 +164,83 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    Text("by $author", style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic)),
+
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.bold)),
+                    Text("by $author",
+                        style: const TextStyle(
+                            fontSize: 16, fontStyle: FontStyle.italic)),
                     const SizedBox(height: 8),
+
                     if (tags.isNotEmpty)
                       Wrap(
                         spacing: 8,
                         children: tags.map((e) => Chip(label: Text(e))).toList(),
                       ),
+
                     const SizedBox(height: 16),
-                    const Text("Summary", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const Text("Summary",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     Text(summary),
                     const SizedBox(height: 16),
-                    ElevatedButton(onPressed: downloadBook, child: const Text("Download Book")),
+
+                    // Buttons
+                    Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: downloadBook,
+                          child: const Text("Download Book"),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // 🔥 Integrated Read Button Logic
+                        ElevatedButton(
+                          onPressed: () async {
+                            final String? path = widget.book['filePath'];
+
+                            if (path == null || path.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Book file not available')),
+                              );
+                              return;
+                            }
+
+                            final file = File(path);
+
+                            if (!await file.exists()) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("File does not exist at path:\n$path"),
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+                              return;
+                            }
+
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReaderScreen(filePath: path, title: '',),
+                              ),
+                            );
+                          },
+                          child: const Text("Read Book"),
+                        ),
+                      ],
+                    ),
+
                     const SizedBox(height: 20),
-                    const Text("Rate this book", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+
+                    // Rating
+                    const Text("Rate this book",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     Row(
                       children: List.generate(5, (index) {
                         return IconButton(
-                          icon: Icon(index < rating ? Icons.star : Icons.star_border),
+                          icon: Icon(index < rating
+                              ? Icons.star
+                              : Icons.star_border),
                           color: Colors.amber,
                           onPressed: () {
                             setState(() {
@@ -202,6 +250,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         );
                       }),
                     ),
+
                     TextField(
                       controller: reviewController,
                       decoration: const InputDecoration(
@@ -209,37 +258,46 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         border: OutlineInputBorder(),
                       ),
                     ),
+
                     const SizedBox(height: 8),
-                    ElevatedButton(onPressed: submitReview, child: const Text("Submit Review")),
+                    ElevatedButton(
+                        onPressed: submitReview,
+                        child: const Text("Submit Review")),
                     const SizedBox(height: 20),
-                    const Text("Reviews", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+
+                    const Text("Reviews",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    if (reviews.isEmpty)
-                      const Text("No reviews yet"),
+
+                    if (reviews.isEmpty) const Text("No reviews yet"),
+
                     Column(
                       children: reviews.map((r) {
                         return ListTile(
                           leading: CircleAvatar(
                             radius: 18,
-                            backgroundImage: r["profilePic"] != null ? MemoryImage(r["profilePic"]) : null,
-                            child: r["profilePic"] == null ? const Icon(Icons.person) : null,
+                            backgroundImage: r["profilePic"] != null
+                                ? MemoryImage(r["profilePic"])
+                                : null,
+                            child: r["profilePic"] == null
+                                ? const Icon(Icons.person)
+                                : null,
                           ),
                           title: Text(r["username"] ?? "Unknown User"),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                children: List.generate(
-                                  r['rating'],
-                                      (i) => const Icon(Icons.star, color: Colors.amber, size: 14),
-                                ),
+                                children: List.generate(r['rating'],
+                                        (i) => const Icon(Icons.star,
+                                        color: Colors.amber, size: 14)),
                               ),
                               Text(r["review"] ?? ""),
                             ],
                           ),
                         );
                       }).toList(),
-                    )
+                    ),
                   ],
                 ),
               ),

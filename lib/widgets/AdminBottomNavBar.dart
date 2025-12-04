@@ -3,7 +3,7 @@ import '../screens/admin_users_screen.dart';
 import '../screens/admin_books_screen.dart';
 import '../screens/admin_posts_screen.dart';
 import '../screens/admin_add_notice_screen.dart';
-import '../screens/rolepick_screen.dart'; // <-- import role pick screen
+import '../screens/admin_verification_screen.dart';
 
 class AdminBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -45,11 +45,10 @@ class AdminBottomNavBar extends StatelessWidget {
         );
         break;
 
-      case 4: // Quick Logout
-        Navigator.pushAndRemoveUntil(
+      case 4: // Verification
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const RolePickScreen()),
-              (route) => false,
+          MaterialPageRoute(builder: (_) => const AdminVerificationScreen()),
         );
         break;
     }
@@ -71,9 +70,7 @@ class AdminBottomNavBar extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // ---------------------------
-            // NAV ICON ROW
-            // ---------------------------
+            // NAV ICONS
             Positioned.fill(
               top: 70 * 0.10,
               child: Row(
@@ -81,15 +78,14 @@ class AdminBottomNavBar extends StatelessWidget {
                 children: [
                   _navIcon(Icons.group_outlined, 0, context),
                   _navIcon(Icons.menu_book_outlined, 1, context),
-                  const SizedBox(width: 65), // space for central Add button
+                  const SizedBox(width: 65), // center button gap
                   _navIcon(Icons.article_outlined, 3, context),
-                  _navIcon(Icons.logout, 4, context),
+                  _navIcon(Icons.verified, 4, context),
                 ],
               ),
             ),
-            // ---------------------------
-            // CENTRAL ADD BUTTON
-            // ---------------------------
+
+            // CENTER ADD BUTTON
             Positioned(
               top: -28,
               left: 0,
@@ -123,9 +119,6 @@ class AdminBottomNavBar extends StatelessWidget {
     );
   }
 
-  // ---------------------------
-  // NAV ICON WITH UNDERLINE
-  // ---------------------------
   Widget _navIcon(IconData icon, int index, BuildContext context) {
     final bool selected = (index == currentIndex);
 
