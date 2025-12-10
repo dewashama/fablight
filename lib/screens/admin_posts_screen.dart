@@ -1,8 +1,10 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../controllers/database/db_helper.dart';
 import 'admin_post_edit_screen.dart';
 import '../widgets/AdminBottomNavBar.dart';
-import '../widgets/AdminHeader_bar.dart';   // ✅ IMPORTANT
+import '../widgets/AdminHeader_bar.dart';
 
 class AdminPostsScreen extends StatefulWidget {
   const AdminPostsScreen({super.key});
@@ -23,7 +25,7 @@ class _AdminPostsScreenState extends State<AdminPostsScreen> {
   }
 
   Future<void> fetchPosts() async {
-    final res = await DBHelper.instance.getPosts();
+    final res = await DBHelper.instance.getPostsWithImages();
     setState(() {
       posts = res;
       filteredPosts = res;
@@ -65,7 +67,7 @@ class _AdminPostsScreenState extends State<AdminPostsScreen> {
     );
 
     if (confirm == true) {
-      await DBHelper.instance.deletePost(postId);
+      await DBHelper.instance.deletePostWithImages(postId);
       fetchPosts();
     }
   }
@@ -74,11 +76,9 @@ class _AdminPostsScreenState extends State<AdminPostsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
-      /// ⬇️ REPLACED APPBAR WITH ADMIN HEADER
       body: Column(
         children: [
-          const AdminHeaderSection(),   // 🔥 Notifications + Logout
+          const AdminHeaderSection(),
 
           Padding(
             padding: const EdgeInsets.all(12.0),
@@ -100,40 +100,71 @@ class _AdminPostsScreenState extends State<AdminPostsScreen> {
               itemCount: filteredPosts.length,
               itemBuilder: (context, index) {
                 final post = filteredPosts[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  child: ListTile(
-                    leading: post['profilePic'] != null
-                        ? CircleAvatar(
-                      backgroundImage:
-                      MemoryImage(post['profilePic']),
-                    )
-                        : const CircleAvatar(child: Icon(Icons.person)),
-                    title: Text(post['caption'] ?? ''),
-                    subtitle: Text(
-                        'By: ${post['username'] ?? 'Unknown'}'),
+                final images = post['images'] as List<String>? ?? [];
 
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit,
-                              color: Colors.blue),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    AdminPostEditScreen(post: post),
+                        // Horizontal scroll of images
+                        if (images.isNotEmpty)
+                          SizedBox(
+                            height: 150,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: images.length,
+                              itemBuilder: (_, imgIndex) {
+                                return Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  width: 150,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    image: DecorationImage(
+                                      image: FileImage(
+                                        File(images[imgIndex]),
+                                      ),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+
+                        const SizedBox(height: 8),
+
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: post['profilePic'] != null
+                              ? CircleAvatar(
+                            backgroundImage: MemoryImage(post['profilePic'] as Uint8List),
+                          )
+                              : const CircleAvatar(child: Icon(Icons.person)),
+                          title: Text(post['caption'] ?? ''),
+                          subtitle: Text('By: ${post['username'] ?? 'Unknown'}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AdminPostEditScreen(post: post),
+                                    ),
+                                  ).then((_) => fetchPosts());
+                                },
                               ),
-                            ).then((_) => fetchPosts());
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete,
-                              color: Colors.red),
-                          onPressed: () => deletePost(post['id']),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () => deletePost(post['id']),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -144,7 +175,6 @@ class _AdminPostsScreenState extends State<AdminPostsScreen> {
           ),
         ],
       ),
-
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
     );
   }

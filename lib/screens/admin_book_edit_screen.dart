@@ -1,8 +1,10 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';   // ✅ File picker
 import '../controllers/database/db_helper.dart';
 import 'reader_screen.dart';
+import '../widgets/AdminHeader_bar.dart';        // ✅ Admin Header
 
 class AdminBookEditScreen extends StatefulWidget {
   final Map<String, dynamic> book;
@@ -33,36 +35,25 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
     coverBytes = widget.book['cover'];
   }
 
-  @override
-  void dispose() {
-    titleController.dispose();
-    summaryController.dispose();
-    authorController.dispose();
-    filePathController.dispose();
-    tagsController.dispose();
-    super.dispose();
-  }
-
   Future<void> pickCover() async {
     final picker = ImagePicker();
-    final XFile? pickedFile =
-    await picker.pickImage(source: ImageSource.gallery);
-
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      final bytes = await pickedFile.readAsBytes();
-      setState(() {
-        coverBytes = bytes;
-      });
-    }
+      setState(() async => coverBytes = await pickedFile.readAsBytes());
+  }
   }
 
+  /// ✅ PICK & REPLACE EPUB/PDF FILE
   Future<void> pickFile() async {
-    // You can use file_picker package if this is a local file
-    // Example:
-    // final result = await FilePicker.platform.pickFiles();
-    // if (result != null) {
-    //   filePathController.text = result.files.single.path!;
-    // }
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['epub', 'pdf'],
+    );
+
+    if (result != null && result.files.single.path != null) {
+      filePathController.text = result.files.single.path!;
+      setState(() {});
+    }
   }
 
   void saveChanges() async {
@@ -77,7 +68,7 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
       };
 
       await DBHelper.instance.updateBook(widget.book['id'], updatedBook);
-      Navigator.pop(context); // Back to search list
+      Navigator.pop(context);
     }
   }
 
@@ -88,19 +79,18 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
         title: const Text('Delete Book'),
         content: const Text('Are you sure you want to delete this book?'),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete', style: TextStyle(color: Colors.red))),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );
 
     if (confirm == true) {
       await DBHelper.instance.deleteBook(widget.book['id']);
-      Navigator.pop(context); // Back to search list
+      Navigator.pop(context);
     }
   }
 
@@ -108,7 +98,10 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ReaderScreen(filePath: filePathController.text, title: '',),
+        builder: (_) => ReaderScreen(
+          filePath: filePathController.text,
+          title: titleController.text,
+        ),
       ),
     );
   }
@@ -116,106 +109,148 @@ class _AdminBookEditScreenState extends State<AdminBookEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Book', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF2929BB),
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white), // back arrow white
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
+      backgroundColor: Colors.white,
+
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          /// 🔵 Admin Header
+          const AdminHeaderSection(),
+
+          /// 🔙 Back Arrow + Title
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: Row(
               children: [
-                GestureDetector(
-                  onTap: pickCover,
-                  child: CircleAvatar(
-                    radius: 50,
-                    backgroundImage: coverBytes != null
-                        ? MemoryImage(coverBytes!)
-                        : const AssetImage('assets/book_placeholder.jpg')
-                    as ImageProvider,
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, size: 28),
+                  onPressed: () => Navigator.pop(context),
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                  validator: (val) =>
-                  val == null || val.trim().isEmpty ? 'Title required' : null,
+                const SizedBox(width: 4),
+                const Text(
+                  "Edit Book",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: summaryController,
-                  decoration: const InputDecoration(labelText: 'Summary'),
-                  maxLines: 3,
-                  validator: (val) =>
-                  val == null || val.trim().isEmpty ? 'Summary required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: authorController,
-                  decoration: const InputDecoration(labelText: 'Author'),
-                  validator: (val) =>
-                  val == null || val.trim().isEmpty ? 'Author required' : null,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: filePathController,
-                        decoration: const InputDecoration(labelText: 'File Path'),
-                        validator: (val) => val == null || val.trim().isEmpty
-                            ? 'File path required'
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: pickFile,
-                      child: const Text('Change File'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: tagsController,
-                  decoration:
-                  const InputDecoration(labelText: 'Tags (comma separated)'),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                      onPressed: deleteBook,
-                      child: const Text('Delete Book'),
-                    ),
-                    Row(
-                      children: [
-                        ElevatedButton(
-                          onPressed: openReader,
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green, foregroundColor: Colors.white),
-                          child: const Text('Read'),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: saveChanges,
-                          child: const Text('Save Changes'),
-                        ),
-                      ],
-                    ),
-                  ],
-                )
               ],
             ),
           ),
-        ),
+
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      /// 📚 Cover Image Picker
+                      GestureDetector(
+                        onTap: pickCover,
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundImage: coverBytes != null
+                              ? MemoryImage(coverBytes!)
+                              : const AssetImage(
+                              'assets/book_placeholder.jpg')
+                          as ImageProvider,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: titleController,
+                        decoration: const InputDecoration(labelText: 'Title'),
+                        validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Title required' : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: summaryController,
+                        decoration: const InputDecoration(labelText: 'Summary'),
+                        maxLines: 3,
+                        validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Summary required' : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: authorController,
+                        decoration: const InputDecoration(labelText: 'Author'),
+                        validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Author required' : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      /// 📂 FILE PICKER (EPUB/PDF)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: filePathController,
+                              decoration: const InputDecoration(labelText: 'File Path'),
+                              validator: (v) =>
+                              v == null || v.trim().isEmpty ? 'File required' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: pickFile,
+                            child: const Text('Change File'),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: tagsController,
+                        decoration: const InputDecoration(
+                          labelText: 'Tags (comma separated)',
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      /// BUTTONS
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: deleteBook,
+                            child: const Text('Delete Book'),
+                          ),
+
+                          Row(
+                            children: [
+                              ElevatedButton(
+                                onPressed: openReader,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Read'),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: saveChanges,
+                                child: const Text('Save Changes'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,3 +1,4 @@
+// db_helper.dart
 import 'dart:typed_data';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -18,13 +19,15 @@ class DBHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
+    // Bump version to 17 (was 15). Adjust if you already changed it elsewhere.
     return await openDatabase(
       path,
-      version: 15, // Incremented for notifications
+      version: 17,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
   }
+
 
   Future _createDB(Database db, int version) async {
     await db.execute('''
@@ -67,6 +70,16 @@ class DBHelper {
         FOREIGN KEY(userId) REFERENCES users(id)
       )
     ''');
+    await db.execute('''
+    CREATE TABLE post_likes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        postId INTEGER NOT NULL,
+        userId INTEGER NOT NULL,
+        UNIQUE(postId, userId),
+        FOREIGN KEY(postId) REFERENCES posts(id),
+    FOREIGN KEY(userId) REFERENCES users(id)
+    );
+    ''');
 
     await db.execute('''
       CREATE TABLE posts (
@@ -74,10 +87,19 @@ class DBHelper {
         userId INTEGER,
         caption TEXT NOT NULL,
         body TEXT,
-        imagePath TEXT,
+        imagePath TEXT,            -- legacy: kept but ignored for multi-image
         likes INTEGER DEFAULT 0,
         createdAt TEXT NOT NULL,
         FOREIGN KEY(userId) REFERENCES users(id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE post_images (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        postId INTEGER NOT NULL,
+        imagePath TEXT NOT NULL,
+        FOREIGN KEY(postId) REFERENCES posts(id) ON DELETE CASCADE
       )
     ''');
 
@@ -119,21 +141,28 @@ class DBHelper {
       )
     ''');
 
-    // -----------------------------
-    // NEW NOTIFICATIONS TABLE
-    // -----------------------------
     await db.execute('''
-    CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId INTEGER NOT NULL,
-      title TEXT NOT NULL,
-      message TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      isRead INTEGER DEFAULT 0,
-      FOREIGN KEY(userId) REFERENCES users(id)
-  )
-''');
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        isRead INTEGER DEFAULT 0,
+        FOREIGN KEY(userId) REFERENCES users(id)
+      )
+    ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS book_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filePath TEXT UNIQUE,
+        lastPage INTEGER,
+        lastEpubCfi TEXT
+      )
+    ''');
+
+    // create initial admin user (same as before)
     await DBHelper.instance.registerUser(
       'admin@example.com',
       'adminpass',
@@ -141,11 +170,10 @@ class DBHelper {
       name: 'Administrator',
       role: 'admin',
     );
-
-
   }
 
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    // preserve all previous upgrade logic
     if (oldVersion < 8) {
       try { await db.execute('ALTER TABLE reviews ADD COLUMN userId INTEGER'); } catch (_) {}
       try { await db.execute('ALTER TABLE reviews ADD COLUMN createdAt TEXT'); } catch (_) {}
@@ -161,13 +189,15 @@ class DBHelper {
       try { await db.execute('ALTER TABLE books ADD COLUMN userId INTEGER'); } catch (_) {}
     }
     if (oldVersion < 12) {
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS notices (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          image BLOB NOT NULL,
-          slot INTEGER NOT NULL UNIQUE
-        )
-      ''');
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS notices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            image BLOB NOT NULL,
+            slot INTEGER NOT NULL UNIQUE
+          )
+        ''');
+      } catch (_) {}
     }
     if (oldVersion < 13) {
       try { await db.execute('ALTER TABLE books ADD COLUMN isApproved INTEGER DEFAULT 0'); } catch (_) {}
@@ -176,36 +206,38 @@ class DBHelper {
       try { await db.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"); } catch (_) {}
     }
     if (oldVersion < 15) {
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS notifications (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL,
-          message TEXT NOT NULL,
-          createdAt TEXT NOT NULL,
-          isRead INTEGER DEFAULT 0
-        )
-      ''');
-    }
-    if (oldVersion < 15) {
-      await db.execute('''
-    CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      message TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      isRead INTEGER DEFAULT 0
-    )
-  ''');
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            createdAt TEXT NOT NULL,
+            isRead INTEGER DEFAULT 0
+          )
+        ''');
+      } catch (_) {}
     }
     if (oldVersion < 16) {
       try {
         await db.execute('ALTER TABLE notifications ADD COLUMN userId INTEGER DEFAULT 1');
-        // default 1 just to avoid nulls; adjust as needed
       } catch (_) {}
     }
 
+    // NEW: post_images table (added in version 17)
+    if (oldVersion < 17) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS post_images (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            postId INTEGER NOT NULL,
+            imagePath TEXT NOT NULL,
+            FOREIGN KEY(postId) REFERENCES posts(id) ON DELETE CASCADE
+          )
+        ''');
+      } catch (_) {}
+    }
   }
-
   // =======================================================
   // NOTIFICATIONS METHODS
   // =======================================================
@@ -617,6 +649,7 @@ class DBHelper {
   // =======================================================
   // POSTS METHODS
   // =======================================================
+  /// Legacy insertPost - kept for compatibility but new code should use insertPostWithImages
   Future<int> insertPost({
     required int userId,
     required String caption,
@@ -637,32 +670,142 @@ class DBHelper {
     );
   }
 
-  Future<int> updatePost(int postId, Map<String, dynamic> newValues) async {
+  // db_helper.dart
+  Future<bool> likePost(int postId, int userId) async {
     final db = await database;
-    return await db.update(
-      'posts',
-      newValues,
-      where: 'id = ?',
-      whereArgs: [postId],
-    );
+
+    try {
+      await db.insert(
+        'post_likes',
+        {'postId': postId, 'userId': userId},
+      );
+
+      // Increment post likes count
+      final res = await db.query('posts', where: 'id = ?', whereArgs: [postId], limit: 1);
+      final currentLikes = res.first['likes'] as int? ?? 0;
+      await db.update('posts', {'likes': currentLikes + 1}, where: 'id = ?', whereArgs: [postId]);
+
+      return true; // liked successfully
+    } catch (_) {
+      return false; // user already liked
+    }
   }
 
-  Future<int> deletePost(int postId) async {
-    final db = await database;
-    return await db.delete(
-      'posts',
-      where: 'id = ?',
-      whereArgs: [postId],
-    );
-  }
 
-  Future<int> likePost(int postId, {int? userId}) async {
+
+  /// Insert post and its multiple images (post_images)
+  Future<int> insertPostWithImages({
+    required int userId,
+    required String caption,
+    String? body,
+    List<String>? imagePaths,
+  }) async {
     final db = await instance.database;
-    return await db.rawUpdate(
-      "UPDATE posts SET likes = IFNULL(likes,0) + 1 WHERE id = ?",
-      [postId],
+    // Insert post (we keep legacy imagePath blank to avoid confusion)
+    final postId = await db.insert(
+      'posts',
+      {
+        'userId': userId,
+        'caption': caption,
+        'body': body ?? '',
+        'imagePath': '', // legacy column left blank for new posts
+        'likes': 0,
+        'createdAt': DateTime.now().toIso8601String(),
+      },
     );
+
+    // Insert image rows
+    if (imagePaths != null && imagePaths.isNotEmpty) {
+      final batch = db.batch();
+      for (final path in imagePaths) {
+        batch.insert('post_images', {'postId': postId, 'imagePath': path});
+      }
+      await batch.commit(noResult: true);
+    }
+
+    return postId;
   }
+
+  /// Update a post and optionally replace its images (this will delete old post_images and insert new ones)
+  Future<int> updatePostWithImages({
+    required int postId,
+    Map<String, dynamic>? postValues,
+    List<String>? imagePaths,
+  }) async {
+    final db = await database;
+
+    // Update post columns if provided
+    int updated = 0;
+    if (postValues != null && postValues.isNotEmpty) {
+      updated = await db.update('posts', postValues, where: 'id = ?', whereArgs: [postId]);
+    }
+
+    // Replace images: delete existing then insert new
+    try {
+      await db.delete('post_images', where: 'postId = ?', whereArgs: [postId]);
+    } catch (_) {}
+
+    if (imagePaths != null && imagePaths.isNotEmpty) {
+      final batch = db.batch();
+      for (final path in imagePaths) {
+        batch.insert('post_images', {'postId': postId, 'imagePath': path});
+      }
+      await batch.commit(noResult: true);
+    }
+
+    return updated;
+  }
+
+  /// Delete post and its images
+  Future<int> deletePostWithImages(int postId) async {
+    final db = await database;
+    // delete images first
+    await db.delete('post_images', where: 'postId = ?', whereArgs: [postId]);
+    // delete post row
+    return await db.delete('posts', where: 'id = ?', whereArgs: [postId]);
+  }
+
+  /// Get images for a post
+  Future<List<String>> getImagesForPost(int postId) async {
+    final db = await database;
+    final res = await db.query('post_images', where: 'postId = ?', whereArgs: [postId], orderBy: 'id ASC');
+    return res.map((r) => r['imagePath'] as String).toList();
+  }
+
+  /// Get posts with associated user info and a list of image paths (imagePaths: List<String>)
+  Future<List<Map<String, dynamic>>> getPostsWithImages() async {
+    final db = await database;
+    final posts = await db.rawQuery('''
+      SELECT posts.*, users.username, users.profilePic
+      FROM posts
+      LEFT JOIN users ON posts.userId = users.id
+      ORDER BY posts.createdAt DESC
+    ''');
+
+    final List<Map<String, dynamic>> result = [];
+    for (final p in posts) {
+      final postId = p['id'] as int;
+      final images = await getImagesForPost(postId);
+      // convert to a mutable map copy and add imagePaths
+      final mapCopy = Map<String, dynamic>.from(p);
+      mapCopy['imagePaths'] = images; // List<String>
+      result.add(mapCopy);
+    }
+
+    return result;
+  }
+
+  /// Keep your previous getPosts for backward compatibility (returns posts without images list)
+  Future<List<Map<String, dynamic>>> getPosts() async {
+    final db = await instance.database;
+    return await db.rawQuery('''
+      SELECT posts.*, users.username, users.profilePic
+      FROM posts
+      INNER JOIN users ON posts.userId = users.id
+      ORDER BY posts.id DESC
+    ''');
+  }
+
 
   // =======================================================
   // COMMENTS METHODS
@@ -759,15 +902,9 @@ class DBHelper {
     ''', [activeUser['id']]);
   }
 
-  Future<List<Map<String, dynamic>>> getPosts() async {
-    final db = await instance.database;
-    return await db.rawQuery('''
-      SELECT posts.*, users.username, users.profilePic
-      FROM posts
-      INNER JOIN users ON posts.userId = users.id
-      ORDER BY posts.id DESC
-    ''');
-  }
+
+
+
 
   // =======================================================
   // GET BOOKS UPLOADED BY ACTIVE USER
@@ -823,6 +960,31 @@ class DBHelper {
       orderBy: 'createdAt DESC',
     );
   }
+  Future<void> saveBookProgress(String filePath, int? lastPage, String? lastEpubCfi) async {
+    final db = await database;
+    await db.insert(
+      'book_progress',
+      {
+        'filePath': filePath,
+        'lastPage': lastPage,
+        'lastEpubCfi': lastEpubCfi,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<String, dynamic>?> getBookProgress(String filePath) async {
+    final db = await database;
+    final res = await db.query(
+      'book_progress',
+      where: 'filePath = ?',
+      whereArgs: [filePath],
+      limit: 1,
+    );
+    if (res.isNotEmpty) return res.first;
+    return null;
+  }
+
 
 
 }

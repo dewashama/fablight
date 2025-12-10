@@ -213,18 +213,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              await DBHelper.instance.updatePost(
-                post['id'],
-                {
+              await DBHelper.instance.updatePostWithImages(
+                postId: post['id'],
+                postValues: {
                   "caption": captionController.text,
                   "body": bodyController.text,
                 },
+                // imagePaths: null, // optional, default is null
               );
 
-              await fetchUserPosts();
-
-              Navigator.pop(context);
+              // Optionally, refresh posts or navigate back
+              // e.g., fetchPosts();
+              Navigator.pop(context); // if you want to close the edit screen
             },
+
             child: const Text("Save"),
           ),
         ],
@@ -256,7 +258,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirm == true) {
-      await DBHelper.instance.deletePost(postId);
+      await DBHelper.instance.deletePostWithImages(postId);
       fetchUserPosts();
     }
   }

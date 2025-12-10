@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:carousel_slider/carousel_slider.dart';
 import '../controllers/database/db_helper.dart';
 import '../controllers/session_controller.dart';
 import '../models/post.dart';
@@ -19,6 +20,7 @@ class CommunityScreen extends StatefulWidget {
 class _CommunityScreenState extends State<CommunityScreen> {
   List<Map<String, dynamic>> postsWithUser = [];
   int? currentUserId;
+  Map<int, int> carouselIndexes = {}; // Track carousel index for each post
 
   @override
   void initState() {
@@ -32,7 +34,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> loadPosts() async {
-    // Fetch all posts including user info
     postsWithUser = await DBHelper.instance.getPosts();
 
     if (!mounted) return;
@@ -85,6 +86,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   final p = postsWithUser[index];
                   Uint8List? profilePic = p['profilePic'];
 
+                  // Split images if multiple paths exist
+                  List<String> imagePaths = [];
+                  if (p['imagePath'] != null && p['imagePath'].toString().isNotEmpty) {
+                    // If stored as comma-separated string of paths
+                    imagePaths = p['imagePath'].toString().split(',');
+                  }
+
                   return GestureDetector(
                     onTap: () async {
                       await Navigator.push(
@@ -124,13 +132,54 @@ class _CommunityScreenState extends State<CommunityScreen> {
                             ),
                           ),
 
-                          // POST IMAGE
-                          if (p['imagePath'].toString().isNotEmpty)
-                            Image.file(
-                              File(p['imagePath']),
-                              height: 250,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
+                          // POST IMAGES CAROUSEL
+                          if (imagePaths.isNotEmpty)
+                            Column(
+                              children: [
+                                CarouselSlider.builder(
+                                  itemCount: imagePaths.length,
+                                  itemBuilder: (context, imgIndex, realIndex) {
+                                    return ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.file(
+                                        File(imagePaths[imgIndex]),
+                                        width: double.infinity,
+                                        height: 250,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    );
+                                  },
+                                  options: CarouselOptions(
+                                    height: 250,
+                                    viewportFraction: 1,
+                                    enableInfiniteScroll: false,
+                                    onPageChanged: (carouselIndex, reason) {
+                                      setState(() {
+                                        carouselIndexes[index] = carouselIndex;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                // Dots Indicator
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: List.generate(imagePaths.length, (dotIndex) {
+                                    return Container(
+                                      width: 6,
+                                      height: 6,
+                                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: (carouselIndexes[index] ?? 0) == dotIndex
+                                            ? Colors.blue
+                                            : Colors.grey.shade300,
+                                      ),
+                                    );
+                                  }),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
                             ),
 
                           // POST CAPTION & LIKES
@@ -159,7 +208,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: 3),
+      bottomNavigationBar: const BottomNavBar(currentIndex: 3),
     );
   }
 }

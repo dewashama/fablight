@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../controllers/database/db_helper.dart';
 import 'package:image_picker/image_picker.dart';
+import '../widgets/AdminHeader_bar.dart';
 
 class AdminUserEditScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -19,7 +20,7 @@ class _AdminUserEditScreenState extends State<AdminUserEditScreen> {
   late TextEditingController passwordController;
   Uint8List? profilePic;
 
-  bool obscurePassword = true; // 🔹 toggle password visibility
+  bool obscurePassword = true;
 
   @override
   void initState() {
@@ -31,8 +32,8 @@ class _AdminUserEditScreenState extends State<AdminUserEditScreen> {
   }
 
   Future<void> pickProfilePic() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
       final bytes = await pickedFile.readAsBytes();
@@ -56,101 +57,121 @@ class _AdminUserEditScreenState extends State<AdminUserEditScreen> {
     }
   }
 
-  void deleteUser() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete User'),
-        content: const Text('Are you sure you want to delete this user?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete', style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await DBHelper.instance.deleteUser(widget.user['id']);
-      Navigator.pop(context);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit User'),
-        backgroundColor: const Color(0xFF2929BB),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
+      backgroundColor: Colors.white,
+
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          /// 🔵 Admin Header
+          const AdminHeaderSection(),
+
+          /// 🔙 Back Arrow + Title
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: Row(
               children: [
-                GestureDetector(
-                  onTap: pickProfilePic,
-                  child: CircleAvatar(
-                    radius: 50,
-                    backgroundImage: profilePic != null
-                        ? MemoryImage(profilePic!)
-                        : const AssetImage('assets/profile.jpg') as ImageProvider,
+                /// BACK BUTTON
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, size: 28),
+                  onPressed: () => Navigator.pop(context),
+                ),
+
+                const SizedBox(width: 4),
+
+                const Text(
+                  "Edit User",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: usernameController,
-                  decoration: const InputDecoration(labelText: 'Username'),
-                  validator: (val) => val == null || val.trim().isEmpty ? 'Username required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (val) => val == null || val.trim().isEmpty ? 'Email required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: passwordController,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        obscurePassword ? Icons.visibility_off : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          obscurePassword = !obscurePassword;
-                        });
-                      },
-                    ),
-                  ),
-                  obscureText: obscurePassword, // 🔹 toggle here
-                  validator: (val) => val == null || val.isEmpty ? 'Password required' : null,
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      onPressed: deleteUser,
-                      child: const Text('Delete User'),
-                    ),
-                    ElevatedButton(
-                      onPressed: saveChanges,
-                      child: const Text('Save Changes'),
-                    ),
-                  ],
-                )
               ],
             ),
           ),
-        ),
+
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      GestureDetector(
+                        onTap: pickProfilePic,
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundImage: profilePic != null
+                              ? MemoryImage(profilePic!)
+                              : const AssetImage('assets/profile.jpg')
+                          as ImageProvider,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: usernameController,
+                        decoration:
+                        const InputDecoration(labelText: 'Username'),
+                        validator: (val) => val == null || val.trim().isEmpty
+                            ? 'Username required'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: emailController,
+                        decoration: const InputDecoration(labelText: 'Email'),
+                        validator: (val) => val == null || val.trim().isEmpty
+                            ? 'Email required'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: passwordController,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          suffixIcon: IconButton(
+                            icon: Icon(obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility),
+                            onPressed: () {
+                              setState(() {
+                                obscurePassword = !obscurePassword;
+                              });
+                            },
+                          ),
+                        ),
+                        obscureText: obscurePassword,
+                        validator: (val) =>
+                        val == null || val.isEmpty ? 'Password required' : null,
+                      ),
+                      const SizedBox(height: 24),
+
+                      ElevatedButton(
+                        onPressed: saveChanges,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 32, vertical: 14),
+                        ),
+                        child: const Text(
+                          'Save Changes',
+                          style:
+                          TextStyle(fontSize: 16, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
